@@ -56,18 +56,18 @@ func run() error {
 		return fmt.Errorf("fetching history: %w", err)
 	}
 
-	// Step 5: Write output file.
+	// Step 5: Update master history and write daily diff.
 	outputDir, err := ExpandPath(cfg.OutputDir)
 	if err != nil {
 		return fmt.Errorf("expanding output path: %w", err)
 	}
 
-	output := NewHistoryOutput(time.Now(), episodes)
-	if err := WriteHistory(outputDir, output); err != nil {
-		return fmt.Errorf("writing history: %w", err)
+	newCount, err := UpdateHistory(outputDir, time.Now(), episodes)
+	if err != nil {
+		return fmt.Errorf("updating history: %w", err)
 	}
 
-	fmt.Printf("Wrote %d episodes to %s/history.json\n", len(episodes), outputDir)
+	fmt.Printf("%d new/changed episodes (fetched %d, master in %s/history.json)\n", newCount, len(episodes), outputDir)
 	return nil
 }
 
