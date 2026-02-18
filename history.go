@@ -11,8 +11,9 @@ import (
 
 // HistoryOutput is the top-level JSON structure written to the output file.
 type HistoryOutput struct {
-	FetchedAt string    `json:"fetched_at"`
-	Episodes  []Episode `json:"episodes"`
+	FetchedAt      string    `json:"fetched_at"`
+	FetchedAtLocal string    `json:"fetched_at_local"`
+	Episodes       []Episode `json:"episodes"`
 }
 
 // NewHistoryOutput creates a HistoryOutput stamped with the current time.
@@ -22,14 +23,16 @@ type HistoryOutput struct {
 // called "dependency injection" for time.
 func NewHistoryOutput(fetchedAt time.Time, episodes []Episode) HistoryOutput {
 	return HistoryOutput{
-		FetchedAt: fetchedAt.UTC().Format(time.RFC3339),
-		Episodes:  episodes,
+		FetchedAt:      fetchedAt.UTC().Format(time.RFC3339),
+		FetchedAtLocal: fetchedAt.Format(time.RFC3339),
+		Episodes:       episodes,
 	}
 }
 
 // HistoryPath returns the path for the daily history file.
+// It uses local time so the file lands under the user's calendar date.
 func HistoryPath(outputDir string, fetchedAt time.Time) string {
-	date := fetchedAt.UTC()
+	date := fetchedAt
 	return filepath.Join(
 		outputDir,
 		fmt.Sprintf("%d", date.Year()),

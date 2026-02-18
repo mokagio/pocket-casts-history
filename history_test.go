@@ -37,6 +37,25 @@ func TestNewHistoryOutputConvertsToUTC(t *testing.T) {
 	if output.FetchedAt != "2026-02-17T12:00:00Z" {
 		t.Errorf("FetchedAt = %q, want %q (UTC-normalized)", output.FetchedAt, "2026-02-17T12:00:00Z")
 	}
+	if output.FetchedAtLocal != "2026-02-17T17:00:00+05:00" {
+		t.Errorf("FetchedAtLocal = %q, want %q (original timezone)", output.FetchedAtLocal, "2026-02-17T17:00:00+05:00")
+	}
+}
+
+// TestHistoryPathUsesLocalDate verifies the daily path uses the local date,
+// not UTC — so a late-night fetch lands under today's local date even when
+// UTC has already rolled over.
+func TestHistoryPathUsesLocalDate(t *testing.T) {
+	// 23:00 AEST (UTC+10) = 13:00 UTC same day, no date difference.
+	// But 01:00 AEST on Feb 18 = 15:00 UTC on Feb 17.
+	aest := time.FixedZone("AEST", 10*60*60)
+	ts := time.Date(2026, 2, 18, 1, 0, 0, 0, aest) // local: Feb 18, UTC: Feb 17
+
+	path := HistoryPath("/out", ts)
+	want := filepath.Join("/out", "2026", "02", "18.json")
+	if path != want {
+		t.Errorf("HistoryPath = %q, want %q (local date)", path, want)
+	}
 }
 
 // TestWriteHistory verifies that the JSON file is written correctly.
