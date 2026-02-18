@@ -6,7 +6,9 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"time"
@@ -28,6 +30,9 @@ func main() {
 // normal error returns instead of os.Exit, making the flow easier to follow
 // and test.
 func run() error {
+	raw := flag.Bool("raw", false, "print the raw API JSON response and exit")
+	flag.Parse()
+
 	// Step 1: Load or create config.
 	cfg, err := loadOrCreateConfig()
 	if err != nil {
@@ -49,7 +54,25 @@ func run() error {
 		return fmt.Errorf("logging in: %w", err)
 	}
 
-	// Step 4: Fetch listening history.
+	// Step 4a: If -raw, dump the unprocessed API response and exit.
+	if *raw {
+		data, err := client.FetchHistoryRaw(token)
+		if err != nil {
+			return fmt.Errorf("fetching history: %w", err)
+		}
+		// Pretty-print so the output is readable.
+		var buf json.RawMessage
+		if err := json.Unmarshal(data, &buf); err != nil {
+			// Fall back to raw bytes if it's not valid JSON.
+			os.Stdout.Write(data)
+			return nil
+		}
+		pretty, _ := json.MarshalIndent(buf, "", "  ")
+		fmt.Println(string(pretty))
+		return nil
+	}
+
+	// Step 4b: Fetch and parse listening history.
 	fmt.Println("Fetching listening history...")
 	episodes, err := client.FetchHistory(token)
 	if err != nil {
