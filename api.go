@@ -29,7 +29,8 @@ type LoginResponse struct {
 // Episode represents a single episode from the history response.
 //
 // We use `json:"..."` tags to map JSON keys to Go field names.
-// Fields use pointer types or omitempty where the API may omit them.
+// The Status field is not part of the API response — it's derived from
+// PlayedUpTo and Duration after fetching.
 type Episode struct {
 	UUID         string `json:"uuid"`
 	Title        string `json:"title"`
@@ -39,6 +40,21 @@ type Episode struct {
 	Published    string `json:"published"`
 	Duration     int    `json:"duration"`
 	PlayedUpTo   int    `json:"playedUpTo"`
+	Status       string `json:"status"`
+}
+
+// EpisodeStatus derives a listening status from playback progress.
+//
+// Thresholds: "completed" if ≥90% played (Pocket Casts often stops a few
+// seconds before the end), "started" if any progress, "unplayed" otherwise.
+func EpisodeStatus(playedUpTo, duration int) string {
+	if duration <= 0 || playedUpTo <= 0 {
+		return "unplayed"
+	}
+	if float64(playedUpTo)/float64(duration) >= 0.9 {
+		return "completed"
+	}
+	return "started"
 }
 
 // HistoryResponse is the JSON body returned by the history endpoint.
@@ -115,10 +131,8 @@ func (c *Client) Login(email, password string) (string, error) {
 	return loginResp.Token, nil
 }
 
-// FetchHistory retrieves the user's listening history.
-//
-// The token parameter is the bearer token obtained from Login.
-func (c *Client) FetchHistory(token string) ([]Episode, error) {
+// fetchHistoryBody makes the history API call and returns the raw response body.
+func (c *Client) fetchHistoryBody(token string) ([]byte, error) {
 	req, err := http.NewRequest(http.MethodPost, c.BaseURL+"/user/history", nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating history request: %w", err)
@@ -132,15 +146,45 @@ func (c *Client) FetchHistory(token string) ([]Episode, error) {
 	}
 	defer resp.Body.Close()
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading history response: %w", err)
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("history request failed (HTTP %d): %s", resp.StatusCode, respBody)
+		return nil, fmt.Errorf("history request failed (HTTP %d): %s", resp.StatusCode, body)
+	}
+
+	return body, nil
+}
+
+// FetchHistory retrieves the user's listening history.
+//
+// The token parameter is the bearer token obtained from Login. Each episode's
+// Status field is derived from its playback progress after decoding.
+func (c *Client) FetchHistory(token string) ([]Episode, error) {
+	body, err := c.fetchHistoryBody(token)
+	if err != nil {
+		return nil, err
 	}
 
 	var historyResp HistoryResponse
-	if err := json.NewDecoder(resp.Body).Decode(&historyResp); err != nil {
+	if err := json.Unmarshal(body, &historyResp); err != nil {
 		return nil, fmt.Errorf("decoding history response: %w", err)
 	}
 
+	for i := range historyResp.Episodes {
+		ep := &historyResp.Episodes[i]
+		ep.Status = EpisodeStatus(ep.PlayedUpTo, ep.Duration)
+	}
+
 	return historyResp.Episodes, nil
+}
+
+// FetchHistoryRaw retrieves the raw JSON response from the history endpoint.
+//
+// Useful for inspecting which fields the API actually returns, since our
+// Episode struct only maps a subset of them.
+func (c *Client) FetchHistoryRaw(token string) ([]byte, error) {
+	return c.fetchHistoryBody(token)
 }

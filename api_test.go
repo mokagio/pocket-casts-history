@@ -97,6 +97,34 @@ func TestLogin(t *testing.T) {
 	}
 }
 
+// TestEpisodeStatus verifies the status derivation from playback progress.
+func TestEpisodeStatus(t *testing.T) {
+	tests := []struct {
+		name       string
+		playedUpTo int
+		duration   int
+		want       string
+	}{
+		{name: "no progress", playedUpTo: 0, duration: 3600, want: "unplayed"},
+		{name: "just started", playedUpTo: 51, duration: 3778, want: "started"},
+		{name: "halfway", playedUpTo: 1800, duration: 3600, want: "started"},
+		{name: "exactly 90%", playedUpTo: 900, duration: 1000, want: "completed"},
+		{name: "above 90%", playedUpTo: 3500, duration: 3600, want: "completed"},
+		{name: "fully played", playedUpTo: 3600, duration: 3600, want: "completed"},
+		{name: "zero duration", playedUpTo: 100, duration: 0, want: "unplayed"},
+		{name: "both zero", playedUpTo: 0, duration: 0, want: "unplayed"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := EpisodeStatus(tt.playedUpTo, tt.duration)
+			if got != tt.want {
+				t.Errorf("EpisodeStatus(%d, %d) = %q, want %q", tt.playedUpTo, tt.duration, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestFetchHistory verifies the history endpoint against a fake server.
 func TestFetchHistory(t *testing.T) {
 	sampleEpisodes := []Episode{
@@ -179,6 +207,14 @@ func TestFetchHistory(t *testing.T) {
 			}
 			if !tt.wantErr && len(episodes) != tt.want {
 				t.Errorf("FetchHistory() returned %d episodes, want %d", len(episodes), tt.want)
+			}
+			// Verify status is populated on successful fetches with episodes.
+			if !tt.wantErr && len(episodes) > 0 {
+				for i, ep := range episodes {
+					if ep.Status == "" {
+						t.Errorf("episodes[%d].Status is empty, want derived value", i)
+					}
+				}
 			}
 		})
 	}
