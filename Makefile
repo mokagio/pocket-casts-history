@@ -5,7 +5,7 @@ BIN := pocket-casts-history
 test:
 	go test ./...
 
-build:
+build: test clean
 	go build -o $(BIN) .
 
 run: build
