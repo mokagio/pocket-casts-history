@@ -39,8 +39,9 @@ type Episode struct {
 	URL          string `json:"url"`
 	Published    string `json:"published"`
 	Duration     int    `json:"duration"`
-	PlayedUpTo   int    `json:"playedUpTo"`
-	Status       string `json:"status"`
+	PlayedUpTo      int    `json:"playedUpTo"`
+	Status          string `json:"status"`
+	ProgressPercent int    `json:"progress_percent"`
 }
 
 // EpisodeStatus derives a listening status from playback progress.
@@ -55,6 +56,18 @@ func EpisodeStatus(playedUpTo, duration int) string {
 		return "completed"
 	}
 	return "started"
+}
+
+// EpisodeProgressPercent computes playback progress as a percentage (0–100).
+func EpisodeProgressPercent(playedUpTo, duration int) int {
+	if duration <= 0 || playedUpTo <= 0 {
+		return 0
+	}
+	pct := playedUpTo * 100 / duration
+	if pct > 100 {
+		return 100
+	}
+	return pct
 }
 
 // HistoryResponse is the JSON body returned by the history endpoint.
@@ -176,6 +189,7 @@ func (c *Client) FetchHistory(token string) ([]Episode, error) {
 	for i := range historyResp.Episodes {
 		ep := &historyResp.Episodes[i]
 		ep.Status = EpisodeStatus(ep.PlayedUpTo, ep.Duration)
+		ep.ProgressPercent = EpisodeProgressPercent(ep.PlayedUpTo, ep.Duration)
 	}
 
 	return historyResp.Episodes, nil
