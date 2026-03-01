@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 )
 
@@ -44,8 +45,11 @@ func HistoryPath(outputDir string, fetchedAt time.Time) string {
 // LoadHistory reads and parses a history JSON file.
 // Returns an empty HistoryOutput (not an error) if the file doesn't exist,
 // so first run works cleanly.
+//
+// Retries on EDEADLK, which Dropbox can cause by holding a lock on the
+// file during sync.
 func LoadHistory(path string) (HistoryOutput, error) {
-	data, err := os.ReadFile(path)
+	data, err := readFileWithRetry(path, 3, 500*time.Millisecond)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return HistoryOutput{}, nil
@@ -59,6 +63,26 @@ func LoadHistory(path string) (HistoryOutput, error) {
 	}
 
 	return output, nil
+}
+
+// readFileWithRetry calls os.ReadFile, retrying up to maxRetries times
+// on EDEADLK (resource deadlock avoided). This handles transient locks
+// from file-syncing services like Dropbox.
+func readFileWithRetry(path string, maxRetries int, delay time.Duration) ([]byte, error) {
+	var data []byte
+	var err error
+
+	for attempt := range maxRetries + 1 {
+		data, err = os.ReadFile(path)
+		if err == nil || !errors.Is(err, syscall.EDEADLK) {
+			return data, err
+		}
+		if attempt < maxRetries {
+			time.Sleep(delay)
+		}
+	}
+
+	return nil, err
 }
 
 // DiffEpisodes returns episodes that are new or have changed PlayedUpTo
