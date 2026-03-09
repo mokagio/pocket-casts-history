@@ -28,6 +28,51 @@ For **automated use** (launchd, cron), grant `/usr/bin/security` access so it ca
 security add-generic-password -a "your@email.com" -s "pocket-casts-api-login" -w "your-password" -T /usr/bin/security
 ```
 
+## Running as a nightly cron job (recommended)
+
+This is the recommended approach on macOS.
+launchd skips jobs if the machine is asleep; cron paired with a scheduled wake is more reliable.
+
+### 1. Schedule a daily wake
+
+Tell macOS to wake the machine 5 minutes before the job runs:
+
+```bash
+sudo pmset repeat wake MTWRFSU 22:55:00
+```
+
+Verify:
+
+```bash
+pmset -g sched
+```
+
+### 2. Add the cron job
+
+```bash
+crontab -e
+```
+
+Add:
+
+```
+0 23 * * * /path/to/automations/nightly-podcast-history.sh >> /path/to/automations/nightly-podcast-history.log 2>> /path/to/automations/nightly-podcast-history.err
+```
+
+### 3. Grant cron Full Disk Access
+
+On macOS, cron (`/usr/sbin/cron`) needs Full Disk Access to run scripts reliably.
+Go to **System Settings → Privacy & Security → Full Disk Access** and add `/usr/sbin/cron`.
+
+### Troubleshooting
+
+- **Job never runs** — check Full Disk Access for `/usr/sbin/cron`.
+- **`go: No such file or directory`** — the wrapper script must export `PATH` to include Homebrew (`/opt/homebrew/bin`).
+- **Keychain `exit status 36`** — see the Credentials section above.
+- **Machine was asleep** — confirm `pmset -g sched` shows the wake schedule; re-run `sudo pmset repeat wake` if missing.
+
+---
+
 ## Running as a launchd service
 
 ### 1. Create a wrapper script
