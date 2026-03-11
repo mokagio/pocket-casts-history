@@ -69,6 +69,7 @@ Go to **System Settings → Privacy & Security → Full Disk Access** and add `/
 - **Job never runs** — check Full Disk Access for `/usr/sbin/cron`.
 - **`go: No such file or directory`** — the wrapper script must export `PATH` to include Homebrew (`/opt/homebrew/bin`).
 - **Keychain `exit status 36`** — see the Credentials section above.
+- **`Permission denied`** — the wrapper script lost its execute bit. Run `chmod +x` on it again. This can happen silently if the script is edited by a tool that doesn't preserve permissions.
 - **Machine was asleep** — confirm `pmset -g sched` shows the wake schedule; re-run `sudo pmset repeat wake` if missing.
 
 ---
@@ -156,4 +157,5 @@ A `LastExitStatus` of `0` means success.
 - **`go: No such file or directory`** — the wrapper script is missing the `PATH` export for Homebrew.
 - **Keychain `exit status 36`** — the Keychain item wasn't created with `-T /usr/bin/security`. Delete and re-add it with the `-T` flag.
 - **`kickstart` does nothing over SSH** — the service runs in the `Aqua` (GUI) session. Test locally or via Screen Sharing.
+- **`Permission denied`** — the wrapper script lost its execute bit. Run `chmod +x` on it again. This can happen silently if the script is edited by a tool that doesn't preserve permissions.
 - **Logs are empty** — check that `StandardOutPath`/`StandardErrorPath` in the plist point to writable paths.
