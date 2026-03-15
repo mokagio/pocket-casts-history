@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -57,8 +59,18 @@ var passwordRegexp = regexp.MustCompile(`password: "([^"]*)"`)
 // It calls `security find-generic-password -s <service> -g` which outputs
 // both the account (email) and the password to stderr. The -g flag is what
 // triggers password output.
+//
+// The login keychain path is passed explicitly so the command works in
+// restricted environments (e.g. cron) where the default search list
+// doesn't include the login keychain.
 func ReadCredentials(runner CommandRunner, keychainItem string) (Credentials, error) {
-	output, err := runner.Run("security", "find-generic-password", "-s", keychainItem, "-g")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return Credentials{}, fmt.Errorf("resolving home directory: %w", err)
+	}
+	keychainPath := filepath.Join(home, "Library", "Keychains", "login.keychain-db")
+
+	output, err := runner.Run("security", "find-generic-password", "-s", keychainItem, "-g", keychainPath)
 	if err != nil {
 		return Credentials{}, fmt.Errorf("reading keychain item %q: %w\noutput: %s", keychainItem, err, output)
 	}
