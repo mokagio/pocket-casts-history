@@ -39,11 +39,10 @@ func run() error {
 		return err
 	}
 
-	// Step 2: Read credentials from Keychain.
-	fmt.Println("Reading credentials from Keychain...")
-	creds, err := ReadCredentials(ExecRunner{}, cfg.KeychainItem)
+	// Step 2: Read credentials — try file first, then Keychain.
+	creds, err := loadCredentials(cfg.KeychainItem)
 	if err != nil {
-		return fmt.Errorf("reading credentials: %w\n\nHave you stored them? Run:\n  security add-generic-password -a \"your@email.com\" -s %q -w", err, cfg.KeychainItem)
+		return err
 	}
 
 	// Step 3: Login to Pocket Casts.
@@ -92,6 +91,35 @@ func run() error {
 
 	fmt.Printf("%d new/changed episodes (fetched %d, master in %s/history.json)\n", newCount, len(episodes), outputDir)
 	return nil
+}
+
+// loadCredentials tries the credentials file first, then falls back to the
+// macOS Keychain.
+//
+// The file-based path is preferred for unattended environments (cron) where
+// the Keychain is locked and inaccessible.
+func loadCredentials(keychainItem string) (Credentials, error) {
+	credsPath, err := CredentialsFilePath()
+	if err != nil {
+		return Credentials{}, err
+	}
+
+	creds, err := ReadCredentialsFile(credsPath)
+	if err == nil {
+		fmt.Println("Reading credentials from file...")
+		return creds, nil
+	}
+
+	if !errors.Is(err, os.ErrNotExist) {
+		return Credentials{}, fmt.Errorf("reading credentials: %w", err)
+	}
+
+	fmt.Println("Reading credentials from Keychain...")
+	creds, err = ReadCredentials(ExecRunner{}, keychainItem)
+	if err != nil {
+		return Credentials{}, fmt.Errorf("reading credentials: %w\n\nHave you stored them? Run:\n  security add-generic-password -a \"your@email.com\" -s %q -w\n\nOr create a credentials file at %s", err, keychainItem, credsPath)
+	}
+	return creds, nil
 }
 
 // loadOrCreateConfig loads the config from disk, or runs the first-run setup

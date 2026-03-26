@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -146,5 +148,68 @@ func TestReadCredentials(t *testing.T) {
 				t.Errorf("ReadCredentials():\n  got:  %+v\n  want: %+v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestReadCredentialsFile verifies reading credentials from a YAML file.
+func TestReadCredentialsFile(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    Credentials
+		wantErr bool
+	}{
+		{
+			name:    "valid file",
+			content: "email: user@example.com\npassword: s3cret\n",
+			want:    Credentials{Email: "user@example.com", Password: "s3cret"},
+		},
+		{
+			name:    "missing email",
+			content: "password: s3cret\n",
+			wantErr: true,
+		},
+		{
+			name:    "missing password",
+			content: "email: user@example.com\n",
+			wantErr: true,
+		},
+		{
+			name:    "empty file",
+			content: "",
+			wantErr: true,
+		},
+		{
+			name:    "invalid yaml",
+			content: ":::not yaml",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "credentials.yaml")
+			if err := os.WriteFile(path, []byte(tt.content), 0o600); err != nil {
+				t.Fatalf("writing test file: %v", err)
+			}
+
+			got, err := ReadCredentialsFile(path)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ReadCredentialsFile() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && got != tt.want {
+				t.Errorf("ReadCredentialsFile():\n  got:  %+v\n  want: %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestReadCredentialsFileMissing verifies that a missing file returns
+// an os.ErrNotExist error, so callers can fall back to the Keychain.
+func TestReadCredentialsFileMissing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "nonexistent.yaml")
+	_, err := ReadCredentialsFile(path)
+	if err == nil {
+		t.Fatal("expected error for missing file, got nil")
 	}
 }

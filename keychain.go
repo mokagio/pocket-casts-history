@@ -7,12 +7,14 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
-// Credentials holds the email and password retrieved from the Keychain.
+// Credentials holds the email and password for API authentication.
 type Credentials struct {
-	Email    string
-	Password string
+	Email    string `yaml:"email"`
+	Password string `yaml:"password"`
 }
 
 // CommandRunner abstracts shell command execution.
@@ -108,4 +110,41 @@ func ParseSecurityOutput(output string) (Credentials, error) {
 	}
 
 	return Credentials{Email: email, Password: password}, nil
+}
+
+// CredentialsFilePath returns the path to the file-based credentials store.
+//
+// It lives alongside the config file under ~/.config/pocket-casts-history/.
+func CredentialsFilePath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("getting home directory: %w", err)
+	}
+	return filepath.Join(home, ".config", "pocket-casts-history", "credentials.yaml"), nil
+}
+
+// ReadCredentialsFile reads email and password from a YAML file.
+//
+// This is the preferred credential source for unattended environments
+// (e.g. cron) where the macOS Keychain is inaccessible.
+// The file should have 0600 permissions.
+func ReadCredentialsFile(path string) (Credentials, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Credentials{}, fmt.Errorf("reading credentials file: %w", err)
+	}
+
+	var creds Credentials
+	if err := yaml.Unmarshal(data, &creds); err != nil {
+		return Credentials{}, fmt.Errorf("parsing credentials file: %w", err)
+	}
+
+	if creds.Email == "" {
+		return Credentials{}, fmt.Errorf("email is empty in credentials file")
+	}
+	if creds.Password == "" {
+		return Credentials{}, fmt.Errorf("password is empty in credentials file")
+	}
+
+	return creds, nil
 }
